@@ -586,13 +586,25 @@ globalThis.lumiverseHelperGenInterceptor = async function (chat, contextSize, ab
     }
   }
 
+  // === MESSAGE TRUNCATION: Must run BEFORE the Loom Builder snapshot ===
+  {
+    const settings = getSettings();
+    const messageTruncation = settings.messageTruncation || {};
+    if (messageTruncation.enabled && messageTruncation.keepCount > 0) {
+      const keepCount = messageTruncation.keepCount;
+      if (chat.length > keepCount) {
+        chat.splice(0, chat.length - keepCount);
+      }
+    }
+  }
+
   // === LOOM PRESET BUILDER: Store coreChat reference ===
   // The actual prompt assembly happens in CHAT_COMPLETION_SETTINGS_READY handler,
   // which fires later with the full generate_data.messages array.
   // Here we just store the processed coreChat so it can be used at assembly time.
   const loomPreset = resolveActivePreset();
   if (loomPreset) {
-    // Store a snapshot of the chat array BEFORE we apply filters below.
+    // Store a snapshot of the chat array AFTER truncation.
     // The CHAT_COMPLETION_SETTINGS_READY handler will use this as the chat history.
     const chatSnapshot = chat.map(m => ({ ...m }));
     setStoredCoreChat(chatSnapshot);
@@ -615,16 +627,6 @@ globalThis.lumiverseHelperGenInterceptor = async function (chat, contextSize, ab
   const settings = getSettings();
   const sovereignHandEnabled = settings.sovereignHand?.enabled || false;
   const contextFilters = settings.contextFilters || {};
-  const messageTruncation = settings.messageTruncation || {};
-
-  // Message Truncation: Keep only the last N messages
-  if (messageTruncation.enabled && messageTruncation.keepCount > 0) {
-    const keepCount = messageTruncation.keepCount;
-    if (chat.length > keepCount) {
-      const removedCount = chat.length - keepCount;
-      chat.splice(0, removedCount);
-    }
-  }
 
   // Sovereign Hand: Capture and optionally exclude last user message
   const excludeLastMessage = settings.sovereignHand?.excludeLastMessage !== false;
