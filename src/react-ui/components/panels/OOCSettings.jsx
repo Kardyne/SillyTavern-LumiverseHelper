@@ -1,6 +1,6 @@
 import React, { useCallback, useSyncExternalStore } from 'react';
 import clsx from 'clsx';
-import { Clock, LayoutGrid, MessageCircle, FileText, Quote, Type, Hash, Users } from 'lucide-react';
+import { Clock, LayoutGrid, MessageCircle, FileText, Quote, Type, Hash, Users, Sparkles, Zap, ZapOff } from 'lucide-react';
 import { useLumiverseActions, saveToExtensionImmediate, useLumiverseStore } from '../../store/LumiverseContext';
 
 /* global LumiverseBridge */
@@ -15,6 +15,7 @@ const EMPTY_COUNCIL_MEMBERS = [];
 // Stable selector functions
 const selectInterval = () => store.getState().lumiaOOCInterval;
 const selectStyle = () => store.getState().lumiaOOCStyle || 'social';
+const selectAnimations = () => store.getState().oocAnimations || 'full';
 const selectCouncilMode = () => store.getState().councilMode || false;
 const selectCouncilMembers = () => store.getState().councilMembers || EMPTY_COUNCIL_MEMBERS;
 const selectCouncilChatStyle = () => store.getState().councilChatStyle || EMPTY_COUNCIL_STYLE;
@@ -50,12 +51,12 @@ function Toggle({ id, checked, onChange, label, hint }) {
 /**
  * Style option card
  */
-function StyleOption({ id, Icon, title, description, selected, onChange }) {
+function StyleOption({ id, Icon, title, description, selected, onChange, name = 'ooc-style' }) {
     return (
         <label className={clsx('lumiverse-vp-style-option', selected && 'lumiverse-vp-style-option--selected')}>
             <input
                 type="radio"
-                name="ooc-style"
+                name={name}
                 value={id}
                 checked={selected}
                 onChange={() => onChange(id)}
@@ -108,6 +109,7 @@ function OOCSettings() {
     // Get OOC settings directly from store (old code uses root-level fields)
     const interval = useSyncExternalStore(store.subscribe, selectInterval, selectInterval);
     const style = useSyncExternalStore(store.subscribe, selectStyle, selectStyle);
+    const animations = useSyncExternalStore(store.subscribe, selectAnimations, selectAnimations);
 
     // Council mode state
     const councilMode = useSyncExternalStore(store.subscribe, selectCouncilMode, selectCouncilMode);
@@ -121,6 +123,11 @@ function OOCSettings() {
     const handleIntervalChange = useCallback((value) => {
         const intervalNum = value ? parseInt(value, 10) : null;
         store.setState({ lumiaOOCInterval: intervalNum });
+        saveToExtensionImmediate();
+    }, []);
+
+    const handleAnimationsChange = useCallback((value) => {
+        store.setState({ oocAnimations: value });
         saveToExtensionImmediate();
     }, []);
 
@@ -207,6 +214,27 @@ function OOCSettings() {
         },
     ];
 
+    const animationOptions = [
+        {
+            id: 'full',
+            Icon: Sparkles,
+            title: 'Full',
+            description: 'Spinning glow ring and shimmer effects',
+        },
+        {
+            id: 'reduced',
+            Icon: Zap,
+            title: 'Reduced',
+            description: 'Gentle pulse only, no rotation or shimmer',
+        },
+        {
+            id: 'none',
+            Icon: ZapOff,
+            title: 'None',
+            description: 'Static appearance, no animations',
+        },
+    ];
+
     return (
         <div className="lumiverse-vp-settings-panel">
             {/* Comment Trigger Section */}
@@ -244,6 +272,28 @@ function OOCSettings() {
                             {...option}
                             selected={style === option.id}
                             onChange={handleStyleChange}
+                        />
+                    ))}
+                </div>
+            </div>
+
+            {/* Animation Level Section */}
+            <div className="lumiverse-vp-settings-section">
+                <div className="lumiverse-vp-settings-section-header">
+                    <Sparkles size={16} strokeWidth={1.5} />
+                    <span>Animations</span>
+                </div>
+                <p className="lumiverse-vp-settings-desc">
+                    Control how animated OOC comment boxes appear. Reduce or disable for better battery life on mobile.
+                </p>
+                <div className="lumiverse-vp-style-options">
+                    {animationOptions.map(option => (
+                        <StyleOption
+                            key={option.id}
+                            {...option}
+                            name="ooc-animations"
+                            selected={animations === option.id}
+                            onChange={handleAnimationsChange}
                         />
                     ))}
                 </div>

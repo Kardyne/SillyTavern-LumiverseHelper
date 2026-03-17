@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS = {
     enabled: false, // Toggle for non-council synthesis prompt
   },
   oocEnabled: true, // Toggle for OOC comment rendering
+  oocAnimations: "full", // Animation level for OOC comment boxes: 'full' | 'reduced' | 'none'
   lumiaOOCInterval: null,
   lumiaOOCStyle: "social",
   // Council IRC chat style settings
@@ -505,6 +506,7 @@ export function migrateSettings() {
   if (!settings.selectedLoomRetrofits) settings.selectedLoomRetrofits = [];
   if (settings.lumiaOOCInterval === undefined) settings.lumiaOOCInterval = null;
   if (!settings.lumiaOOCStyle) settings.lumiaOOCStyle = "social";
+  if (!settings.oocAnimations) settings.oocAnimations = "full";
 
   // Ensure sovereignHand defaults
   if (!settings.sovereignHand) {

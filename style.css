@@ -3972,6 +3972,44 @@ details.lumia-panel[open] .lumia-panel-chevron {
 }
 
 /* ============================================
+   OOC ANIMATION LEVEL OVERRIDES
+   Applied via body class set from oocAnimations setting.
+   'full' = no class (default)
+   'reduced' = body.lumia-anim-reduced
+   'none' = body.lumia-anim-none
+   ============================================ */
+
+/* Reduced: keep glow ring but replace spin with slow pulse; drop shimmer */
+@keyframes lumia-anim-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes lumia-anim-weave-fade {
+  0%, 100% { opacity: 0.4; background-position: 0% 50%; }
+  50% { opacity: 0.8; background-position: 0% 50%; }
+}
+
+body.lumia-anim-reduced .lumia-ooc-avatar-container::before {
+  animation: lumia-anim-glow-pulse 4s ease-in-out infinite;
+}
+
+body.lumia-anim-reduced .lumia-ooc-comment-box::before {
+  animation: lumia-anim-weave-fade 8s ease-in-out infinite;
+}
+
+body.lumia-anim-reduced .lumia-ooc-comment-box::after {
+  animation: none;
+}
+
+/* None: all OOC decorative animations off */
+body.lumia-anim-none .lumia-ooc-comment-box::before,
+body.lumia-anim-none .lumia-ooc-comment-box::after,
+body.lumia-anim-none .lumia-ooc-avatar-container::before {
+  animation: none;
+}
+
+/* ============================================
    LUMIA EDITOR STYLES
    ============================================ */
 

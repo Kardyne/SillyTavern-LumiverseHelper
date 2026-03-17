@@ -34,6 +34,16 @@ import {
   getConnectionProfileBindings,
 } from "./packCache.js";
 import { applyTheme, removeThemeOverrides, getDefaultTheme } from "./themeManager.js";
+
+/**
+ * Apply OOC animation level by toggling body classes.
+ * @param {'full'|'reduced'|'none'} mode
+ */
+function applyOOCAnimations(mode) {
+  document.body.classList.remove("lumia-anim-reduced", "lumia-anim-none");
+  if (mode === "reduced") document.body.classList.add("lumia-anim-reduced");
+  else if (mode === "none") document.body.classList.add("lumia-anim-none");
+}
 import { getEventSource, getEventTypes, getRequestHeaders, triggerExtensionUpdate, getExtensionGitVersion } from "../stContext.js";
 import { registerDLCTools } from "./councilTools.js";
 
@@ -362,6 +372,9 @@ export async function initializeReactUI(container) {
     const bootTheme = initialSettings.theme || getDefaultTheme();
     applyTheme(bootTheme);
 
+    // Apply saved OOC animation level
+    applyOOCAnimations(initialSettings.oocAnimations || "full");
+
     // Expose the bridge API to React
     window.LumiverseBridge = {
       getSettings: settingsToReactFormat,
@@ -409,15 +422,20 @@ export async function initializeReactUI(container) {
       viewportCleanupFn = window.LumiverseUI.mountViewportPanel(initialSettings);
     }
 
-    // Subscribe to theme changes from the React store for live updates
+    // Subscribe to theme and animation changes from the React store for live updates
     if (window.LumiverseUI.subscribe) {
       let lastTheme = initialSettings.theme;
+      let lastOOCAnimations = initialSettings.oocAnimations;
       window.LumiverseUI.subscribe(() => {
         const state = window.LumiverseUI.getState();
         if (state.theme !== lastTheme) {
           lastTheme = state.theme;
           // Always apply — null means Default Purple, never remove the style element
           applyTheme(state.theme || getDefaultTheme());
+        }
+        if (state.oocAnimations !== lastOOCAnimations) {
+          lastOOCAnimations = state.oocAnimations;
+          applyOOCAnimations(state.oocAnimations || "full");
         }
       });
     }
