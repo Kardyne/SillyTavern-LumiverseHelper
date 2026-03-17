@@ -901,12 +901,37 @@ jQuery(async () => {
   }
 
   // Re-apply active connection profile on boot so ST matches what Lumiverse persisted.
-  // Without this, the UI shows a profile as active but ST keeps its pre-reload settings.
+  // We wait for SETTINGS_UPDATED to fire before applying, so we run after ST's own
+  // connection manager has finished its boot initialization (which resets source/URL).
+  // This avoids a race condition where our early apply gets overwritten by ST's boot.
   const storedProfileId = getStoredActiveProfileId();
   if (storedProfileId) {
-    applyConnectionProfile(storedProfileId, { silent: true }).catch(err => {
-      console.warn(`[${MODULE_NAME}] Failed to re-apply connection profile on boot:`, err);
-    });
+    const eventSource = getEventSource();
+    const eventTypes = getEventTypes();
+    const doApply = () => {
+      applyConnectionProfile(storedProfileId, { silent: true }).catch(err => {
+        console.warn(`[${MODULE_NAME}] Failed to re-apply connection profile on boot:`, err);
+      });
+    };
+    if (eventSource && eventTypes?.SETTINGS_UPDATED) {
+      let applied = false;
+      let debounceTimer = null;
+      const handler = () => {
+        if (applied) { eventSource.removeListener(eventTypes.SETTINGS_UPDATED, handler); return; }
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          if (applied) return;
+          applied = true;
+          eventSource.removeListener(eventTypes.SETTINGS_UPDATED, handler);
+          doApply();
+        }, 300);
+      };
+      eventSource.on(eventTypes.SETTINGS_UPDATED, handler);
+      // Fallback in case SETTINGS_UPDATED never fires
+      setTimeout(() => { if (!applied) { applied = true; doApply(); } }, 2000);
+    } else {
+      doApply();
+    }
   }
 
   // Initial UI refresh

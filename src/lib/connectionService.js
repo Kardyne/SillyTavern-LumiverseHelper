@@ -11,8 +11,6 @@ import {
     getOaiSettings,
     getExecuteSlashCommands,
     writeSecret,
-    getEventSource,
-    getEventTypes,
     getSaveSettingsDebounced,
 } from "../stContext.js";
 import {
@@ -76,9 +74,6 @@ export function normalizeProvider(provider) {
 // ============================================================================
 
 let _isApplying = false;
-let _persistenceGuardUnsub = null;
-let _suppressPersistence = false;
-let _suppressTimer = null;
 
 // ============================================================================
 // INITIALIZATION
@@ -201,11 +196,7 @@ export async function saveProfile(profile) {
  * @param {string} profileId
  */
 export async function deleteProfile(profileId) {
-    const wasActive = getActiveConnectionProfileId() === profileId;
     await removeConnectionProfile(profileId);
-    if (wasActive) {
-        stopPersistenceGuard();
-    }
 }
 
 /**
@@ -281,7 +272,8 @@ export async function captureCurrentAsProfile(name) {
         provider: source,
         model: model || '',
         secretMode: 'st',
-        endpointUrl: oaiSettings.reverse_proxy || null,
+        // Custom (OpenAI-compat) source stores its URL in custom_url, not reverse_proxy.
+        endpointUrl: (source === 'custom' ? oaiSettings.custom_url : null) || oaiSettings.reverse_proxy || null,
         apiKey: oaiSettings.reverse_proxy ? (oaiSettings.proxy_password || null) : null,
         oaiPreset: currentPreset,
         reasoning: captureReasoningSnapshot(),
@@ -394,20 +386,54 @@ export async function applyProfile(profileId, { silent = false } = {}) {
             }
         }
 
-        // 5. Handle endpoint URL AFTER preset (preset can overwrite reverse_proxy)
+        // 5. Handle endpoint URL AFTER preset (preset can overwrite reverse_proxy/custom_url)
         if (oaiSettings) {
+            const isCustomSource = normalizeProvider(profile.provider) === 'custom';
             if (profile.endpointUrl) {
                 oaiSettings.reverse_proxy = profile.endpointUrl;
                 oaiSettings.proxy_password = profile.apiKey || '';
+                // Custom (OpenAI-compat) source uses custom_url for requests, not reverse_proxy.
+                if (isCustomSource) oaiSettings.custom_url = profile.endpointUrl;
             } else {
                 oaiSettings.reverse_proxy = '';
                 oaiSettings.proxy_password = '';
+                if (isCustomSource) oaiSettings.custom_url = '';
             }
+            // Custom source also needs custom_model set — the /model command in step 3 may
+            // have silently failed if the model list wasn't populated yet at that point.
+            if (isCustomSource && profile.model) {
+                oaiSettings.custom_model = profile.model;
+            }
+            // Sync DOM inputs so ST's panel reflects the correct values.
+            try {
+                const proxyInput = document.getElementById('openai_reverse_proxy');
+                if (proxyInput) proxyInput.value = oaiSettings.reverse_proxy;
+                const proxyPassInput = document.getElementById('proxy_password');
+                if (proxyPassInput) proxyPassInput.value = oaiSettings.proxy_password;
+                if (isCustomSource && profile.endpointUrl) {
+                    const customUrlInput = document.getElementById('custom_api_url_text');
+                    if (customUrlInput) customUrlInput.value = profile.endpointUrl;
+                }
+                if (isCustomSource && profile.model) {
+                    const customModelInput = document.getElementById('custom_model_id');
+                    if (customModelInput) customModelInput.value = profile.model;
+                }
+            } catch (e) { /* best-effort */ }
+        }
+
+        // 5.5. Re-run /api now that the URL is correctly set.
+        // Step 2's /api ran before the URL was set so ST's connection test had an empty
+        // endpoint and failed, leaving the "Not connected" state. Running it again here
+        // (with correct URL in place) lets ST perform a successful connection test.
+        // Toastr is already suppressed globally by this point in applyProfile.
+        if (executeSlash && profile.provider) {
+            try {
+                await executeSlash(`/api ${profile.provider}`);
+            } catch (err) { /* best-effort */ }
         }
 
         // 6. Apply reasoning settings
         if (profile.reasoning) {
-            suppressPersistence(1500);
             applyReasoningSnapshot(profile.reasoning);
         }
 
@@ -491,9 +517,6 @@ export async function applyProfile(profileId, { silent = false } = {}) {
             });
         }
 
-        // 13. Start persistence guard
-        startPersistenceGuard(profile);
-
         // Restore toastr and show consolidated success toast
         restoreToastr();
         if (!silent && typeof toastr !== 'undefined') {
@@ -522,103 +545,6 @@ export async function applyProfile(profileId, { silent = false } = {}) {
  */
 export function isApplyingProfile() {
     return _isApplying;
-}
-
-// ============================================================================
-// FORCE-PERSISTENCE GUARD
-// ============================================================================
-
-/**
- * Suppress persistence guard for a duration.
- * @param {number} durationMs
- */
-function suppressPersistence(durationMs = 1500) {
-    _suppressPersistence = true;
-    if (_suppressTimer) clearTimeout(_suppressTimer);
-    _suppressTimer = setTimeout(() => {
-        _suppressPersistence = false;
-        _suppressTimer = null;
-    }, durationMs);
-}
-
-/**
- * Start the force-persistence guard.
- * Watches for ST overwriting our settings and re-applies critical fields.
- * @param {Object} profile - The profile to guard
- */
-function startPersistenceGuard(profile) {
-    stopPersistenceGuard();
-
-    const eventSource = getEventSource();
-    const eventTypes = getEventTypes();
-    if (!eventSource || !eventTypes?.SETTINGS_UPDATED) return;
-
-    let debounceTimer = null;
-
-    const handler = () => {
-        if (_isApplying || _suppressPersistence) return;
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            debounceTimer = null;
-            if (_isApplying || _suppressPersistence) return;
-            reapplyCriticalFields(profile);
-        }, 200);
-    };
-
-    eventSource.on(eventTypes.SETTINGS_UPDATED, handler);
-    _persistenceGuardUnsub = () => {
-        eventSource.removeListener(eventTypes.SETTINGS_UPDATED, handler);
-        if (debounceTimer) clearTimeout(debounceTimer);
-    };
-}
-
-/**
- * Stop the force-persistence guard.
- */
-function stopPersistenceGuard() {
-    if (_persistenceGuardUnsub) {
-        _persistenceGuardUnsub();
-        _persistenceGuardUnsub = null;
-    }
-}
-
-/**
- * Re-apply critical fields if ST overwrote them.
- * @param {Object} profile
- */
-function reapplyCriticalFields(profile) {
-    const oaiSettings = getOaiSettings();
-    if (!oaiSettings) return;
-
-    let changed = false;
-
-    // Check source — always use the canonical value, never an alias
-    const canonical = normalizeProvider(profile.provider);
-    if (canonical && oaiSettings.chat_completion_source !== canonical) {
-        oaiSettings.chat_completion_source = canonical;
-        // Also sync UI dropdown to prevent visual desync
-        try {
-            const sel = document.getElementById('chat_completion_source');
-            if (sel && sel.value !== canonical) {
-                sel.value = canonical;
-            }
-        } catch (e) {}
-        changed = true;
-    }
-
-    // Check endpoint
-    if (profile.endpointUrl) {
-        if (oaiSettings.reverse_proxy !== profile.endpointUrl) {
-            oaiSettings.reverse_proxy = profile.endpointUrl;
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        suppressPersistence(1500);
-        const saveDebounced = getSaveSettingsDebounced();
-        if (saveDebounced) saveDebounced();
-    }
 }
 
 // ============================================================================
