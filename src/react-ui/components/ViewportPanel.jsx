@@ -144,7 +144,7 @@ function OverflowMenu({ tabs, activeTab, onSelect, onClose, side }) {
             <div className="lumiverse-vp-overflow-backdrop" onClick={onClose} />
             <div
                 className="lumiverse-vp-overflow-menu"
-                style={isLeft ? { right: 'auto', left: '100%' } : { left: 'auto', right: '100%' }}
+                style={isLeft ? { left: 'auto', right: '100%' } : { right: 'auto', left: '100%' }}
             >
                 {tabs.map(tab => (
                     <button

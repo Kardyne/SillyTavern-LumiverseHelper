@@ -5713,6 +5713,9 @@ details.lumia-panel[open] .lumia-panel-chevron {
     box-shadow: none;
     text-shadow: none;
     filter: none;
+    /* Create stacking context so overflow menu (z-index:10001) renders above lumiverse-vp-main */
+    position: relative;
+    z-index: 1;
 }
 
 .lumiverse-vp-tab {
@@ -5729,6 +5732,8 @@ details.lumia-panel[open] .lumia-panel-chevron {
     cursor: pointer;
     transition: all 0.2s ease;
     color: var(--lumiverse-text-muted);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     /* Isolate from glow/shadow overrides set by other extensions */
     box-shadow: none;
     text-shadow: none;
@@ -5789,6 +5794,8 @@ details.lumia-panel[open] .lumia-panel-chevron {
 /* Overflow button (Priority+ pattern) */
 .lumiverse-vp-overflow-btn {
     position: relative;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .lumiverse-vp-overflow-dot {
@@ -5807,12 +5814,15 @@ details.lumia-panel[open] .lumia-panel-chevron {
     position: fixed;
     inset: 0;
     z-index: 10000;
+    cursor: pointer; /* Required for iOS to fire click events on divs */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .lumiverse-vp-overflow-menu {
     position: absolute;
     top: 0;
-    right: 100%;
+    left: 100%;
     width: 200px;
     background: var(--lumiverse-bg-elevated);
     border: 1px solid var(--lumiverse-border);
@@ -5837,6 +5847,8 @@ details.lumia-panel[open] .lumia-panel-chevron {
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     /* Isolate from glow/shadow overrides */
     box-shadow: none;
     text-shadow: none;
