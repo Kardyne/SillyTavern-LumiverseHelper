@@ -17,6 +17,7 @@ import {
   getTokenCountAsync,
   getSaveSettingsDebounced,
   getRegexEngineModule,
+  getSaveChat,
 } from "./stContext.js";
 
 // Import DOM utilities
@@ -63,8 +64,8 @@ import {
   isGenerationCycleActive, markGenerationCycleStart, markGenerationCycleEnd,
   abortToolExecution,
   captureWorldInfoEntries, clearWorldInfoEntries,
-  registerDLCTools, getNamedResultRaw } from "./lib/councilTools.js";
-import { resetIndicator } from "./lib/councilVisuals.js";
+  registerDLCTools, getNamedResultRaw, getLatestToolResults } from "./lib/councilTools.js";
+import { resetIndicator, injectCouncilOOCCards, cleanupCouncilOOCCards } from "./lib/councilVisuals.js";
 import { processSceneResult, applySceneBackground } from "./lib/imageGenService.js";
 
 import {
@@ -955,6 +956,31 @@ jQuery(async () => {
   // Pre-load regex engine so the sync accessor is ready by render time
   getRegexEngineModule().catch(() => {});
 
+  // Inject saved council cards for one message (current swipe).
+  // No-op if councilMode is off, no saved results exist, or DOM isn't ready.
+  function tryRestoreCouncilCardsForMessage(mesId) {
+    if (!getSettings().councilMode) return;
+    const msg = getContext()?.chat?.[mesId];
+    if (!msg) return;
+    const swipeId = msg.swipe_id ?? 0;
+    const savedResults = msg.extra?.councilResultsBySwipe?.[swipeId];
+    if (!savedResults || savedResults.length === 0) return;
+    const messageElement = query(`div[mesid="${mesId}"] .mes_text`);
+    if (messageElement) injectCouncilOOCCards(mesId, messageElement, savedResults);
+  }
+
+  // Re-inject council OOC cards for all messages that have saved results in extra.
+  // Called after CHAT_CHANGED once the DOM has settled.
+  function restoreCouncilOOCCards() {
+    if (!getSettings().councilMode) return;
+    const ctx = getContext();
+    if (!ctx?.chat) return;
+    ctx.chat.forEach((message, mesId) => {
+      if (message.is_user) return;
+      tryRestoreCouncilCardsForMessage(mesId);
+    });
+  }
+
   // --- SILLYTAVERN EVENT HANDLERS ---
   if (eventSource && event_types) {
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId) => {
@@ -1004,6 +1030,26 @@ jQuery(async () => {
               processLumiaOOCComments(mesId);
             }
           }
+
+          // Inject council OOC cards for sidecar mode (collapsed by default)
+          // and persist results in message.extra so they survive page reloads.
+          const settings = getSettings();
+          if (settings.councilMode && getCouncilToolsMode() === 'sidecar') {
+            const councilResults = getLatestToolResults();
+            if (councilResults.length > 0) {
+              injectCouncilOOCCards(mesId, messageElement, councilResults);
+              const ctx = getContext();
+              const chatMessage = ctx?.chat?.[mesId];
+              if (chatMessage) {
+                if (!chatMessage.extra) chatMessage.extra = {};
+                if (!chatMessage.extra.councilResultsBySwipe) chatMessage.extra.councilResultsBySwipe = {};
+                const swipeId = chatMessage.swipe_id ?? 0;
+                chatMessage.extra.councilResultsBySwipe[swipeId] = councilResults;
+                const saveFn = getSaveChat();
+                if (saveFn) saveFn().catch(() => {});
+              }
+            }
+          }
         }
       }
     });
@@ -1021,9 +1067,12 @@ jQuery(async () => {
         if (messageElement) {
           const existingBoxes = queryAll("[data-lumia-ooc]", messageElement);
           existingBoxes.forEach((box) => box.remove());
+          cleanupCouncilOOCCards(messageElement);
         }
         // Force reprocess since content may have changed
         processLumiaOOCComments(mesId, true);
+        // Re-inject council cards from saved results (cleanup above removed them).
+        tryRestoreCouncilCardsForMessage(mesId);
       }
     });
 
@@ -1040,6 +1089,7 @@ jQuery(async () => {
         if (messageElement) {
           const existingBoxes = queryAll("[data-lumia-ooc]", messageElement);
           existingBoxes.forEach((box) => box.remove());
+          cleanupCouncilOOCCards(messageElement);
         }
         processLumiaOOCComments(mesId, true);
       }
@@ -1048,6 +1098,9 @@ jQuery(async () => {
       markGenerationCycleEnd();
       clearToolResults();
       resetIndicator();
+      if (!isChatSheldActive()) {
+        tryRestoreCouncilCardsForMessage(mesId);
+      }
     });
 
     eventSource.on(event_types.CHAT_CHANGED, () => {
@@ -1069,6 +1122,15 @@ jQuery(async () => {
       // Also skip when OOC is disabled — no need to scan for comments.
       if (!isChatSheldActive() && getSettings().oocEnabled !== false) {
         scheduleOOCProcessingAfterRender();
+      }
+      if (!isChatSheldActive() && getSettings().councilMode) {
+        // CAVEAT: 800ms is a fixed delay to let ST finish rendering all messages
+        // before we iterate over them. Works for typical chats, but may be too short
+        // on a slow device with a very large chat. A more robust approach would
+        // mirror scheduleOOCProcessingAfterRender() which polls for DOM stability
+        // instead of using a fixed timeout. If council cards don't appear on load,
+        // this delay is the first thing to increase.
+        setTimeout(restoreCouncilOOCCards, 800);
       }
       updateContextMeterTokens();
       // Restore scene background for the new chat (if image generation is enabled)

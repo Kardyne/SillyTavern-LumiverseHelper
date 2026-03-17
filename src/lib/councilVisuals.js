@@ -15,7 +15,7 @@
 import { getSettings, MODULE_NAME } from "./settingsManager.js";
 import { getItemFromLibrary } from "./dataProcessor.js";
 import { getLumiaField } from "./lumiaContent.js";
-import { getLumiaAvatarByName } from "./oocComments.js";
+import { getLumiaAvatarByName, createOOCCommentBox } from "./oocComments.js";
 import { isChatSheldActive } from "./chatSheldService.js";
 
 // Track the current indicator state
@@ -455,4 +455,173 @@ export function isIndicatorShown() {
  */
 export function resetIndicator() {
   hideCouncilIndicator();
+}
+
+// ─── Council OOC Cards ────────────────────────────────────────────────────────
+
+const COUNCIL_CARDS_CLASS = 'lumiverse-council-cards-container';
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatMemberContent(memberResults) {
+  if (memberResults.length === 1) {
+    return escapeHtml(memberResults[0].response || '');
+  }
+  return memberResults
+    .map(r => `<strong>${escapeHtml(r.toolDisplayName || r.toolName || 'Tool')}:</strong> ${escapeHtml(r.response || '')}`)
+    .join('<br><br>');
+}
+
+/**
+ * Inject council OOC cards into a message element after sidecar generation.
+ * Creates one collapsible OOC card per council member using the user's configured
+ * display style (social/margin/whisper). Starts collapsed.
+ * Only runs when IRC mode is disabled and sidecar has results.
+ * @param {number} mesId - The message ID (unused, for future use)
+ * @param {HTMLElement} messageElement - The .mes_text element
+ * @param {Array} results - Array of council tool result objects
+ */
+export function injectCouncilOOCCards(mesId, messageElement, results) {
+  if (!messageElement || !results || results.length === 0) return;
+
+  // Avoid double-injection
+  if (messageElement.querySelector(`.${COUNCIL_CARDS_CLASS}`)) return;
+
+  const settings = getSettings();
+  // Defer to IRC mode if enabled
+  if (settings.councilChatStyle?.enabled) return;
+
+  // Group results by member, skip failures and tool-excluded results
+  const resultsByMember = {};
+  results.forEach(result => {
+    if (!result.success) return;
+    const key = result.memberName || 'Unknown';
+    if (!resultsByMember[key]) resultsByMember[key] = [];
+    resultsByMember[key].push(result);
+  });
+
+  const memberNames = Object.keys(resultsByMember);
+  if (memberNames.length === 0) return;
+
+  // Outer wrapper
+  const wrapper = document.createElement('div');
+  wrapper.className = COUNCIL_CARDS_CLASS;
+  wrapper.style.setProperty('margin-top', '12px', 'important');
+  wrapper.style.setProperty('padding-top', '8px', 'important');
+  wrapper.style.setProperty('border-top', '1px solid var(--lumiverse-border, rgba(147,112,219,0.2))', 'important');
+
+  // Collapsible header
+  const header = document.createElement('div');
+  header.style.setProperty('display', 'flex', 'important');
+  header.style.setProperty('align-items', 'center', 'important');
+  header.style.setProperty('gap', '6px', 'important');
+  header.style.setProperty('cursor', 'pointer', 'important');
+  header.style.setProperty('user-select', 'none', 'important');
+  header.style.setProperty('-webkit-user-select', 'none', 'important');
+  header.style.setProperty('color', 'var(--lumiverse-primary-text-060, rgba(147,112,219,0.6))', 'important');
+  header.style.setProperty('font-size', '11px', 'important');
+  header.style.setProperty('font-weight', '600', 'important');
+  header.style.setProperty('letter-spacing', '0.5px', 'important');
+  header.style.setProperty('text-transform', 'uppercase', 'important');
+  header.style.setProperty('padding', '2px 0', 'important');
+  header.style.setProperty('touch-action', 'manipulation', 'important');
+
+  const chevron = document.createElement('span');
+  chevron.textContent = '▶';
+  chevron.style.setProperty('font-size', '8px', 'important');
+  chevron.style.setProperty('transition', 'transform 0.2s ease', 'important');
+  chevron.style.setProperty('display', 'inline-block', 'important');
+
+  const label = document.createElement('span');
+  label.textContent = `Council · ${memberNames.length} member${memberNames.length !== 1 ? 's' : ''}`;
+
+  header.appendChild(chevron);
+  header.appendChild(label);
+
+  // Content area (collapsed by default)
+  const content = document.createElement('div');
+  content.style.setProperty('display', 'none', 'important');
+  content.style.setProperty('margin-top', '8px', 'important');
+
+  // One collapsible section per member, each collapsed by default
+  memberNames.forEach((memberName, index) => {
+    const memberResults = resultsByMember[memberName];
+    const avatarImg = getLumiaAvatarByName(memberName);
+    const cardContent = formatMemberContent(memberResults);
+    const card = createOOCCommentBox(cardContent, avatarImg, index, memberName);
+    // Strip data-lumia-ooc from council cards so the OOC processor's
+    // already-processed count ([data-lumia-ooc] query) isn't inflated,
+    // which would cause real Lumia OOC tags to be skipped.
+    card.removeAttribute('data-lumia-ooc');
+    card.querySelectorAll('[data-lumia-ooc]').forEach(el => el.removeAttribute('data-lumia-ooc'));
+
+    const memberSection = document.createElement('div');
+    memberSection.style.setProperty('margin-bottom', '4px', 'important');
+
+    const memberHeader = document.createElement('div');
+    memberHeader.style.setProperty('display', 'flex', 'important');
+    memberHeader.style.setProperty('align-items', 'center', 'important');
+    memberHeader.style.setProperty('gap', '5px', 'important');
+    memberHeader.style.setProperty('cursor', 'pointer', 'important');
+    memberHeader.style.setProperty('user-select', 'none', 'important');
+    memberHeader.style.setProperty('-webkit-user-select', 'none', 'important');
+    memberHeader.style.setProperty('color', 'var(--lumiverse-primary-text-060, rgba(147,112,219,0.6))', 'important');
+    memberHeader.style.setProperty('font-size', '11px', 'important');
+    memberHeader.style.setProperty('padding', '3px 0', 'important');
+    memberHeader.style.setProperty('touch-action', 'manipulation', 'important');
+
+    const memberChevron = document.createElement('span');
+    memberChevron.textContent = '▶';
+    memberChevron.style.setProperty('font-size', '7px', 'important');
+    memberChevron.style.setProperty('transition', 'transform 0.2s ease', 'important');
+    memberChevron.style.setProperty('display', 'inline-block', 'important');
+
+    const memberLabel = document.createElement('span');
+    memberLabel.textContent = memberName;
+
+    memberHeader.appendChild(memberChevron);
+    memberHeader.appendChild(memberLabel);
+
+    const memberContent = document.createElement('div');
+    memberContent.style.setProperty('display', 'none', 'important');
+
+    let memberExpanded = false;
+    memberHeader.addEventListener('click', () => {
+      memberExpanded = !memberExpanded;
+      memberContent.style.setProperty('display', memberExpanded ? 'block' : 'none', 'important');
+      memberChevron.style.setProperty('transform', memberExpanded ? 'rotate(90deg)' : 'rotate(0deg)', 'important');
+    });
+
+    memberContent.appendChild(card);
+    memberSection.appendChild(memberHeader);
+    memberSection.appendChild(memberContent);
+    content.appendChild(memberSection);
+  });
+
+  // Toggle on click/tap
+  let expanded = false;
+  header.addEventListener('click', () => {
+    expanded = !expanded;
+    content.style.setProperty('display', expanded ? 'block' : 'none', 'important');
+    chevron.style.setProperty('transform', expanded ? 'rotate(90deg)' : 'rotate(0deg)', 'important');
+  });
+
+  wrapper.appendChild(header);
+  wrapper.appendChild(content);
+  messageElement.appendChild(wrapper);
+}
+
+/**
+ * Remove any injected council OOC cards from a message element.
+ * @param {HTMLElement} messageElement - The .mes_text element
+ */
+export function cleanupCouncilOOCCards(messageElement) {
+  if (!messageElement) return;
+  messageElement.querySelectorAll(`.${COUNCIL_CARDS_CLASS}`).forEach(el => el.remove());
 }
