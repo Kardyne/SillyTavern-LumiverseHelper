@@ -907,16 +907,16 @@ function findOOCParagraphs(container, oocMatches) {
 
   const results = [];
   
-  // Pre-compute normalized fingerprints for all OOC matches (first 50 chars for matching)
+  // Pre-compute normalized full text for all OOC matches
+  // Using the full normalized text (instead of a short prefix/fingerprint) prevents false
+  // matches when OOC content starts with the same text as an earlier narrative paragraph.
   const oocFingerprints = oocMatches.map(ooc => {
     const plainText = htmlToPlainText(ooc.content);
     const normalized = normalizeForMatching(plainText);
-    const fingerprint = normalized.substring(0, Math.min(50, normalized.length));
     return {
       ooc,
       plainText,
       normalized,
-      fingerprint,
       matched: false, // Track which OOCs have been matched
     };
   });
@@ -942,8 +942,8 @@ function findOOCParagraphs(container, oocMatches) {
       const fp = oocFingerprints[fpIdx];
       if (fp.matched) continue; // Already matched to another paragraph
       
-      // Check if paragraph starts with or contains the OOC fingerprint
-      const hasFingerprint = pText.startsWith(fp.fingerprint) || pText.includes(fp.fingerprint);
+      // Check if paragraph starts with or contains the full OOC text
+      const hasFingerprint = pText.startsWith(fp.normalized) || pText.includes(fp.normalized);
       
       if (hasFingerprint) {
         // Calculate overlap ratio - OOC should be at least 50% of paragraph (lowered from 60%)
