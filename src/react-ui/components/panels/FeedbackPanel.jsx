@@ -1,9 +1,11 @@
 import React, { useMemo, useSyncExternalStore, useState, useCallback } from 'react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { BarChart2, CheckCircle, XCircle, Users, ChevronDown, ChevronUp, Briefcase, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { BarChart2, CheckCircle, XCircle, Users, ChevronDown, ChevronUp, Briefcase, Eye, EyeOff, AlertTriangle, BookOpen, Save, Tag } from 'lucide-react';
 import { useLumiverseStore, usePacks } from '../../store/LumiverseContext';
 import LazyImage from '../shared/LazyImage';
+import { saveLoreProposal } from '../../../lib/worldBookService';
+import { getCurrentCharacter, isGroupChat } from '../../../stContext';
 
 // Get store for direct access
 const store = useLumiverseStore;
@@ -223,6 +225,112 @@ function ToolError({ error }) {
 }
 
 /**
+ * Special card for lore_proposal tool results.
+ * Shows title, keywords, content, and Save action.
+ */
+function LoreProposalCard({ rawInput }) {
+    const [status, setStatus] = useState('pending'); // 'pending' | 'saving' | 'saved'
+    const [savedToBook, setSavedToBook] = useState(null);
+    const [errorMsg, setErrorMsg] = useState(null);
+
+    const proposal = rawInput || {};
+    const title = proposal.title || '';
+    // Normalize keywords in case AI returned comma-separated string instead of array
+    const keywords = Array.isArray(proposal.keywords)
+        ? proposal.keywords
+        : (typeof proposal.keywords === 'string'
+            ? proposal.keywords.split(',').map(k => k.trim()).filter(Boolean)
+            : []);
+    const content = proposal.content || '';
+
+    // Guard: if content is empty the AI found nothing worth proposing
+    const isEmpty = !content.trim();
+
+    const handleSave = useCallback(async () => {
+        setStatus('saving');
+        setErrorMsg(null);
+        try {
+            // Resolve character at click time — respects group/no-char context
+            let charInfo = null;
+            if (!isGroupChat()) {
+                const char = getCurrentCharacter();
+                if (char) {
+                    charInfo = { name: char.name, avatar: char.avatar };
+                }
+            }
+            const result = await saveLoreProposal({ title, keywords, content }, charInfo);
+            if (result.success) {
+                setSavedToBook(result.bookName);
+                setStatus('saved');
+            } else {
+                setErrorMsg(result.error || 'Save failed');
+                setStatus('pending');
+            }
+        } catch (err) {
+            setErrorMsg(err.message);
+            setStatus('pending');
+        }
+    }, [title, keywords, content]);
+
+    if (isEmpty) {
+        return (
+            <div className="lumiverse-lore-proposal lumiverse-lore-proposal--empty">
+                <span className="lumiverse-lore-proposal-status-msg">
+                    No lore worth preserving was identified for this scene.
+                </span>
+            </div>
+        );
+    }
+
+    if (status === 'saved') {
+        return (
+            <div className="lumiverse-lore-proposal lumiverse-lore-proposal--saved">
+                <BookOpen size={13} />
+                <span className="lumiverse-lore-proposal-status-msg">
+                    Saved to <em>{savedToBook}</em>
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="lumiverse-lore-proposal">
+            <div className="lumiverse-lore-proposal-title">
+                <BookOpen size={13} className="lumiverse-lore-proposal-title-icon" />
+                <span>{title}</span>
+            </div>
+
+            {keywords.length > 0 && (
+                <div className="lumiverse-lore-proposal-keywords">
+                    <Tag size={11} className="lumiverse-lore-proposal-keywords-icon" />
+                    {keywords.map((kw, i) => (
+                        <span key={i} className="lumiverse-lore-proposal-keyword-chip">{kw}</span>
+                    ))}
+                </div>
+            )}
+
+            <div className="lumiverse-lore-proposal-content">{content}</div>
+
+            {errorMsg && (
+                <div className="lumiverse-lore-proposal-error">{errorMsg}</div>
+            )}
+
+            <div className="lumiverse-lore-proposal-actions">
+                <button
+                    className="lumiverse-lore-proposal-btn lumiverse-lore-proposal-btn--save"
+                    onClick={handleSave}
+                    disabled={status === 'saving'}
+                    type="button"
+                >
+                    <Save size={12} />
+                    {status === 'saving' ? 'Saving…' : 'Save to Lore'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
  * Individual tool result display
  */
 function ToolResult({ result, isLast }) {
@@ -262,9 +370,13 @@ function ToolResult({ result, isLast }) {
                         style={{ overflow: 'hidden' }}
                     >
                         {result.success ? (
-                            <div className="lumiverse-feedback-tool-response">
-                                {result.response || '(No response content)'}
-                            </div>
+                            result.toolName === 'lore_proposal' ? (
+                                <LoreProposalCard rawInput={result.rawInput} />
+                            ) : (
+                                <div className="lumiverse-feedback-tool-response">
+                                    {result.response || '(No response content)'}
+                                </div>
+                            )
                         ) : (
                             <ToolError error={result.error} />
                         )}

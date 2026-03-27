@@ -659,6 +659,144 @@ function setGlobalBookEnabledDOM(bookName, enabled) {
 }
 
 // ---------------------------------------------------------------------------
+// Lore proposal saving
+// ---------------------------------------------------------------------------
+
+/**
+ * Add a world book to a character's auxiliary lorebooks.
+ * Directly manipulates world_info.charLore to attach the book.
+ * @param {string} charAvatar - Character's avatar filename (identifier)
+ * @param {string} bookName - Name of the world book to add
+ */
+async function addBookToCharacterAux(charAvatar, bookName) {
+    const wiMod = await getWorldInfoModule();
+    if (!wiMod?.world_info) {
+        console.warn('[Lumiverse] Cannot add auxiliary book — world_info module unavailable');
+        return false;
+    }
+
+    const worldInfo = wiMod.world_info;
+    const charLore = worldInfo.charLore || [];
+
+    // Find existing entry for this character
+    const idx = charLore.findIndex(e => e.name === charAvatar);
+    const current = idx !== -1 ? (charLore[idx].extraBooks || []) : [];
+
+    // Add book if not already present
+    if (current.includes(bookName)) {
+        return true; // Already attached
+    }
+
+    const next = [...current, bookName];
+
+    if (idx === -1) {
+        charLore.push({ name: charAvatar, extraBooks: next });
+    } else {
+        charLore[idx] = { ...charLore[idx], extraBooks: next };
+    }
+
+    worldInfo.charLore = charLore;
+
+    // Trigger ST to persist the change
+    try {
+        // Call ST's saveSettingsDebounced to persist world_info changes
+        if (typeof wiMod.saveSettingsDebounced === 'function') {
+            wiMod.saveSettingsDebounced();
+        }
+    } catch (e) {
+        console.warn('[Lumiverse] Failed to persist charLore change:', e);
+    }
+
+    return true;
+}
+
+/**
+ * Save a lore proposal to the character's dedicated Lumiverse Lore world book.
+ *
+ * - Book name: "[CharName] - Lumiverse Lore" (falls back to "Lumiverse Lore" if no character)
+ * - Creates the book if it does not exist
+ * - Attaches the book as an auxiliary lorebook to the character
+ * - Falls back to global enable if no character context (group chat)
+ * - Appends a new entry: key=keywords, content=content, comment=title
+ *
+ * @param {{ title: string, keywords: string[], content: string }} proposal
+ * @param {{ name: string, avatar: string }|null} charInfo - Character info (null in group/no-char context)
+ * @returns {Promise<{ success: boolean, bookName: string, error?: string }>}
+ */
+export async function saveLoreProposal(proposal, charInfo) {
+    const safeName = charInfo?.name
+        ? charInfo.name.replace(/[/\\:*?"<>|]/g, '_').trim()
+        : null;
+    const bookName = safeName ? `${safeName} - Lumiverse Lore` : 'Lumiverse Lore';
+
+    try {
+        // 1. Ensure the book exists — create if missing
+        const bookList = await fetchBookList();
+        const exists = bookList.some(b => b.name === bookName);
+        if (!exists) {
+            const created = await createNewBook(bookName);
+            if (!created) {
+                return { success: false, bookName, error: 'Failed to create lore book' };
+            }
+        }
+
+        // 2. Attach to character's auxiliary lorebooks (or enable globally if no character)
+        if (charInfo?.avatar) {
+            const attached = await addBookToCharacterAux(charInfo.avatar, bookName);
+            if (!attached) {
+                // Fallback to global if character attachment failed
+                const enabledBooks = await getGloballyEnabledBooks();
+                if (!enabledBooks.includes(bookName)) {
+                    await setGlobalBookEnabled(bookName, true);
+                }
+            }
+        } else {
+            // No character context (group chat) — enable globally
+            const enabledBooks = await getGloballyEnabledBooks();
+            if (!enabledBooks.includes(bookName)) {
+                await setGlobalBookEnabled(bookName, true);
+            }
+        }
+
+        // 3. Fetch current book data
+        const book = await fetchBook(bookName);
+        if (!book) {
+            return { success: false, bookName, error: 'Failed to load lore book' };
+        }
+
+        // 4. Build new entry
+        const newUid = getNextUid(book.entries);
+        const keywords = Array.isArray(proposal.keywords)
+            ? proposal.keywords
+            : (typeof proposal.keywords === 'string'
+                ? proposal.keywords.split(',').map(k => k.trim()).filter(Boolean)
+                : []);
+        const newEntry = {
+            ...createDefaultEntry(newUid),
+            key: keywords,
+            content: proposal.content,
+            comment: proposal.title,
+        };
+
+        // 5. Save book with new entry appended
+        const updatedEntries = [...book.entries, newEntry];
+        const saveData = {
+            ...(book.originalData || {}),
+            entries: denormalizeEntries(updatedEntries),
+        };
+        const saved = await saveBook(bookName, saveData);
+        if (!saved) {
+            return { success: false, bookName, error: 'Failed to save lore entry' };
+        }
+
+        return { success: true, bookName };
+    } catch (err) {
+        console.error('[Lumiverse] saveLoreProposal error:', err);
+        return { success: false, bookName, error: err.message };
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ST button interceptor
 // ---------------------------------------------------------------------------
 

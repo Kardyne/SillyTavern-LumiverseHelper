@@ -16823,6 +16823,132 @@ details.lumia-panel[open] .lumia-panel-chevron {
 }
 
 /* ============================================
+   Lore Proposal Card (FeedbackPanel)
+   ============================================ */
+
+.lumiverse-lore-proposal {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(147, 112, 219, 0.06);
+    border: 1px solid rgba(147, 112, 219, 0.18);
+    border-radius: 7px;
+}
+
+.lumiverse-lore-proposal--empty,
+.lumiverse-lore-proposal--saved {
+    background: var(--lumiverse-fill-subtle, rgba(0, 0, 0, 0.1));
+    border-color: transparent;
+    padding: 6px 10px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: var(--lumiverse-text-muted, rgba(255, 255, 255, 0.5));
+}
+
+.lumiverse-lore-proposal--saved {
+    color: var(--lumiverse-success, #22c55e);
+    border-color: rgba(34, 197, 94, 0.15);
+    background: rgba(34, 197, 94, 0.06);
+}
+
+.lumiverse-lore-proposal-status-msg,
+.lumiverse-lore-proposal-empty-msg {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.lumiverse-lore-proposal-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lumiverse-text, rgba(255, 255, 255, 0.9));
+    line-height: 1.3;
+}
+
+.lumiverse-lore-proposal-title-icon {
+    color: var(--lumiverse-primary, rgba(147, 112, 219, 0.9));
+    flex-shrink: 0;
+}
+
+.lumiverse-lore-proposal-keywords {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.lumiverse-lore-proposal-keywords-icon {
+    color: var(--lumiverse-text-muted, rgba(255, 255, 255, 0.5));
+    flex-shrink: 0;
+}
+
+.lumiverse-lore-proposal-keyword-chip {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--lumiverse-primary-text, rgba(186, 135, 255, 0.95));
+    background: rgba(147, 112, 219, 0.12);
+    border: 1px solid rgba(147, 112, 219, 0.2);
+    border-radius: 4px;
+    padding: 1px 6px;
+    line-height: 1.6;
+}
+
+.lumiverse-lore-proposal-content {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--lumiverse-text-muted, rgba(255, 255, 255, 0.7));
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.lumiverse-lore-proposal-error {
+    font-size: 11px;
+    color: var(--lumiverse-danger, #ef4444);
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+.lumiverse-lore-proposal-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.lumiverse-lore-proposal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+    line-height: 1;
+}
+
+.lumiverse-lore-proposal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.lumiverse-lore-proposal-btn--save {
+    background: var(--lumiverse-primary, rgba(147, 112, 219, 0.9));
+    color: #fff;
+    border-color: rgba(147, 112, 219, 0.5);
+}
+
+.lumiverse-lore-proposal-btn--save:hover:not(:disabled) {
+    background: var(--lumiverse-primary-hover, rgba(167, 132, 239, 0.95));
+}
+
+/* ============================================
    Content Workshop (Create Tab)
    ============================================ */
 

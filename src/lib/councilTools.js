@@ -1176,6 +1176,42 @@ If the story context is unclear or just starting, describe a neutral establishin
     storeInDeliberation: false,
     gatedBy: "imageGeneration",
   },
+  lore_proposal: {
+    name: "lore_proposal",
+    displayName: "Lore Proposal",
+    description: "Propose a new worldbuilding detail or lore element worth adding permanently to the world book",
+    prompt: `Propose a new worldbuilding detail, lore element, or setting fact that would enrich the world and is worth preserving permanently.
+
+Consider:
+- Cultural practices, traditions, or rituals that fit the setting
+- Historical events or backstory that add depth
+- Factions, organizations, or power structures
+- Locations, landmarks, or geography
+- Magical systems, technologies, or in-world rules
+- Myths, legends, or in-world beliefs
+
+The proposal should feel organic to the established world and be specific enough to be genuinely useful in future scenes. Frame it as an in-world fact, not a narrative suggestion.`,
+    storeInDeliberation: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Short noun-phrase title for this lore entry (3-8 words, e.g. 'The Ironveil Merchant Guild').",
+        },
+        keywords: {
+          type: "array",
+          items: { type: "string" },
+          description: "2-6 lowercase trigger keywords or short phrases that should activate this entry in future context.",
+        },
+        content: {
+          type: "string",
+          description: "The lore entry itself — 1-3 sentences written as objective in-world fact.",
+        },
+      },
+      required: ["title", "keywords", "content"],
+    },
+  },
 };
 
 // Storage for latest tool results - cleared each generation
@@ -2696,8 +2732,14 @@ export function formatToolResultsForDeliberation(results) {
 
     memberResults.forEach((result) => {
       lines.push(`**${result.toolDisplayName}:**`);
-      // Final safety net: normalize response to ensure no JSON leaks into deliberation
-      lines.push(normalizeToolText(result.response));
+      // For lore_proposal, only pass the content field to deliberation —
+      // keywords are metadata for the lorebook, not narrative context
+      if (result.toolName === 'lore_proposal' && result.rawInput?.content) {
+        lines.push(result.rawInput.content);
+      } else {
+        // Final safety net: normalize response to ensure no JSON leaks into deliberation
+        lines.push(normalizeToolText(result.response));
+      }
       lines.push("");
     });
 

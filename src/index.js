@@ -1060,9 +1060,19 @@ jQuery(async () => {
 
           // Inject council OOC cards for sidecar mode (collapsed by default)
           // and persist results in message.extra so they survive page reloads.
+          // Note: lore_proposal results have rawInput stripped and response reduced
+          // to just the content (title/keywords are lorebook metadata, not history).
           const settings = getSettings();
           if (settings.councilMode && getCouncilToolsMode() === 'sidecar') {
-            const councilResults = getLatestToolResults();
+            const allResults = getLatestToolResults();
+            // For lore_proposal: keep only content in response, strip rawInput entirely
+            const councilResults = allResults.map(r => {
+              if (r.toolName === 'lore_proposal') {
+                const { rawInput, ...rest } = r;
+                return { ...rest, response: rawInput?.content || r.response || '' };
+              }
+              return r;
+            });
             if (councilResults.length > 0) {
               injectCouncilOOCCards(mesId, messageElement, councilResults);
               const ctx = getContext();
