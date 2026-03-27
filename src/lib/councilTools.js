@@ -2577,8 +2577,57 @@ export async function executeAllCouncilTools(generationType) {
       return [];
     }
 
-    // Execute members sequentially to avoid overwhelming provider rate limits.
-    // Each member's API calls (initial + retries) complete before the next starts.
+    // Get concurrency setting: 1=sequential, 2+=limited parallel, 0=unlimited
+    const maxConcurrent = parseInt(settings.councilTools?.llm?.maxConcurrent, 10) || 1;
+    const useParallel = maxConcurrent !== 1;
+
+    if (useParallel && activeMembers.length > 1) {
+      // Parallel execution with concurrency limit
+      const limit = maxConcurrent === 0 ? activeMembers.length : Math.min(maxConcurrent, activeMembers.length);
+      const allResults = [];
+      const executing = new Set();
+      let index = 0;
+
+      const runMember = async (member) => {
+        const results = await executeToolsForMember(member, member.tools, contextText, providerInfo, enrichmentText, signal);
+        addMemberToIndicator(member);
+        return results;
+      };
+
+      // Process all members with concurrency limit
+      while (index < activeMembers.length || executing.size > 0) {
+        // Fill up to the limit
+        while (executing.size < limit && index < activeMembers.length) {
+          const member = activeMembers[index];
+          index++;
+          const promise = runMember(member).then(results => {
+            executing.delete(promise);
+            allResults.push(...results);
+            window.LumiverseBridge?.setCouncilToolResults?.([...allResults]);
+            return results;
+          });
+          executing.add(promise);
+        }
+
+        // Wait for at least one to complete if we're at capacity
+        if (executing.size > 0) {
+          await Promise.race(executing);
+        }
+      }
+
+      // Store final results for macro access
+      setLatestToolResults(allResults);
+      window.LumiverseBridge?.setCouncilToolResults?.(allResults);
+
+      const successCount = allResults.filter((r) => r.success).length;
+      const abortedCount = allResults.filter((r) => !r.success && r.aborted).length;
+
+      markIndicatorComplete();
+
+      return allResults;
+    }
+
+    // Sequential execution (default) - respects RPM rate limiting
     const allResults = [];
     for (const member of activeMembers) {
       await rpmGate(signal);

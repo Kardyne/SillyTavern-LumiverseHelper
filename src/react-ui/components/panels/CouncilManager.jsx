@@ -1156,7 +1156,7 @@ function CouncilToolsConfig() {
                             />
                         </div>
                         <div className="lumiverse-council-llm-param">
-                            <label className="lumiverse-council-llm-label" title="Requests per minute (0 = unlimited)">RPM</label>
+                            <label className="lumiverse-council-llm-label" title="Requests per minute (0 = unlimited, only used when Concurrency=1)">RPM</label>
                             <input
                                 type="number"
                                 className="lumiverse-council-llm-input lumiverse-council-llm-input--num"
@@ -1164,7 +1164,19 @@ function CouncilToolsConfig() {
                                 onChange={(e) => updateLLM({ rpm: parseInt(e.target.value, 10) || 0 })}
                                 min={0}
                                 step={1}
-                                title="Max requests per minute. 0 = unlimited."
+                                title="Max requests per minute. Only used when Concurrency=1 (sequential mode)."
+                            />
+                        </div>
+                        <div className="lumiverse-council-llm-param">
+                            <label className="lumiverse-council-llm-label" title="Max concurrent requests (1=sequential, 0=unlimited parallel)">Concurrency</label>
+                            <input
+                                type="number"
+                                className="lumiverse-council-llm-input lumiverse-council-llm-input--num"
+                                value={llm.maxConcurrent ?? 1}
+                                onChange={(e) => updateLLM({ maxConcurrent: parseInt(e.target.value, 10) || 1 })}
+                                min={0}
+                                step={1}
+                                title="Max concurrent council requests. 1=sequential (safest), 2+=limited parallel, 0=unlimited parallel."
                             />
                         </div>
                     </div>

@@ -144,6 +144,7 @@ const initialState = {
             topP: 1.0,
             maxTokens: 4096,
             rpm: 0,
+            maxConcurrent: 1,
             providerProfiles: {},
         },
     },
@@ -1312,6 +1313,7 @@ const actions = {
             topP: currentLLM.topP ?? 1.0,
             maxTokens: currentLLM.maxTokens || 4096,
             rpm: currentLLM.rpm ?? 0,
+            maxConcurrent: currentLLM.maxConcurrent ?? 1,
         };
         if (oldProvider === 'custom') {
             snapshot.endpoint = currentLLM.endpoint || '';
@@ -1331,6 +1333,7 @@ const actions = {
             topP: 1.0,
             maxTokens: 4096,
             rpm: 0,
+            maxConcurrent: 1,
         };
 
         // Determine proxy fields based on provider type
@@ -1347,6 +1350,7 @@ const actions = {
                     topP: restored.topP ?? 1.0,
                     maxTokens: restored.maxTokens || 4096,
                     rpm: restored.rpm ?? 0,
+                    maxConcurrent: restored.maxConcurrent ?? 1,
                     endpoint: newProvider === 'custom' ? (restored.endpoint || '') : '',
                     apiKey: newProvider === 'custom' ? (restored.apiKey || '') : '',
                     proxyEndpoint: supportsProxy ? (restored.proxyEndpoint || '') : '',
