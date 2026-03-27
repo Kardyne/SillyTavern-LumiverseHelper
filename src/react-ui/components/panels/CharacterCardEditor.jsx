@@ -3,9 +3,10 @@ import clsx from 'clsx';
 import {
     ArrowLeft, Save, RotateCcw, Upload,
     FileText, Settings, User, BookOpen, Sparkles,
-    Plus, Trash2, Loader2, Maximize2,
+    Plus, Trash2, Loader2, Maximize2, X,
 } from 'lucide-react';
 import useCharacterEditor from '../../hooks/useCharacterEditor';
+import { getCharExtraBooks, addBookToCharacterAux, removeBookFromCharacterAux } from '../../../lib/worldBookService';
 import LazyImage from '../shared/LazyImage';
 import {
     EditorContent, EditorSection, FormField, TextInput, TextArea, Select,
@@ -47,6 +48,29 @@ export default function CharacterCardEditor({ item, onBack, wideMode = false }) 
     const [activeTab, setActiveTab] = useState('core');
     const fileInputRef = useRef(null);
     const { cropModalProps, openCropFlow } = useImageCropFlow(setAvatarFile);
+
+    const [extraBooks, setExtraBooks] = useState([]);
+    const [auxBookToAdd, setAuxBookToAdd] = useState('');
+
+    useEffect(() => {
+        if (!item?.avatar) { setExtraBooks([]); return; }
+        getCharExtraBooks(item.avatar).then(setExtraBooks);
+    }, [item?.avatar]);
+
+    const handleAddAuxBook = useCallback(async () => {
+        if (!auxBookToAdd || !item?.avatar) return;
+        const ok = await addBookToCharacterAux(item.avatar, auxBookToAdd);
+        if (ok) {
+            setExtraBooks(prev => [...prev, auxBookToAdd]);
+            setAuxBookToAdd('');
+        }
+    }, [auxBookToAdd, item?.avatar]);
+
+    const handleRemoveAuxBook = useCallback(async (bookName) => {
+        if (!item?.avatar) return;
+        const ok = await removeBookFromCharacterAux(item.avatar, bookName);
+        if (ok) setExtraBooks(prev => prev.filter(b => b !== bookName));
+    }, [item?.avatar]);
 
     // Ctrl+S / Cmd+S to save
     useEffect(() => {
@@ -345,6 +369,48 @@ export default function CharacterCardEditor({ item, onBack, wideMode = false }) 
                         ...worldBookNames.map((name) => ({ value: name, label: name })),
                     ]}
                 />
+            </FormField>
+            <FormField label="Auxiliary Lorebooks" hint="Extra books always active for this character">
+                {extraBooks.length > 0 && (
+                    <div className="lumiverse-tag-pill-input" style={{ cursor: 'default', marginBottom: '6px' }}>
+                        {extraBooks.map(book => (
+                            <span key={book} className="lumiverse-tag-pill">
+                                <span className="lumiverse-tag-pill-text">{book}</span>
+                                <button
+                                    className="lumiverse-tag-pill-remove"
+                                    onClick={() => handleRemoveAuxBook(book)}
+                                    type="button"
+                                    aria-label={`Remove ${book}`}
+                                >
+                                    <X size={10} strokeWidth={2.5} />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Select
+                            value={auxBookToAdd}
+                            onChange={setAuxBookToAdd}
+                            options={[
+                                { value: '', label: '— attach a book —' },
+                                ...worldBookNames
+                                    .filter(n => !extraBooks.includes(n))
+                                    .map(n => ({ value: n, label: n })),
+                            ]}
+                        />
+                    </div>
+                    <button
+                        className="lumiverse-icon-btn"
+                        onClick={handleAddAuxBook}
+                        disabled={!auxBookToAdd}
+                        type="button"
+                        title="Attach book"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </div>
             </FormField>
             <FormField label="Depth Prompt">
                 {renderTextField(formState.depth_prompt_prompt, (v) => updateField('depth_prompt_prompt', v), {

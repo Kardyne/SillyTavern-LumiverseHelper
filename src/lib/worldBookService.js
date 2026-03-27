@@ -668,7 +668,7 @@ function setGlobalBookEnabledDOM(bookName, enabled) {
  * @param {string} charAvatar - Character's avatar filename (identifier)
  * @param {string} bookName - Name of the world book to add
  */
-async function addBookToCharacterAux(charAvatar, bookName) {
+export async function addBookToCharacterAux(charAvatar, bookName) {
     const wiMod = await getWorldInfoModule();
     if (!wiMod?.world_info) {
         console.warn('[Lumiverse] Cannot add auxiliary book — world_info module unavailable');
@@ -700,6 +700,52 @@ async function addBookToCharacterAux(charAvatar, bookName) {
     // Trigger ST to persist the change
     try {
         // Call ST's saveSettingsDebounced to persist world_info changes
+        if (typeof wiMod.saveSettingsDebounced === 'function') {
+            wiMod.saveSettingsDebounced();
+        }
+    } catch (e) {
+        console.warn('[Lumiverse] Failed to persist charLore change:', e);
+    }
+
+    return true;
+}
+
+/**
+ * Get the list of auxiliary lorebooks attached to a character.
+ * @param {string} charAvatar - Character's avatar filename (identifier)
+ * @returns {Promise<string[]>} Array of book names, empty if none
+ */
+export async function getCharExtraBooks(charAvatar) {
+    const wiMod = await getWorldInfoModule();
+    if (!wiMod?.world_info) return [];
+    const charLore = wiMod.world_info.charLore || [];
+    const entry = charLore.find(e => e.name === charAvatar);
+    return entry?.extraBooks ? [...entry.extraBooks] : [];
+}
+
+/**
+ * Remove a world book from a character's auxiliary lorebooks.
+ * @param {string} charAvatar - Character's avatar filename (identifier)
+ * @param {string} bookName - Name of the world book to remove
+ * @returns {Promise<boolean>} true on success
+ */
+export async function removeBookFromCharacterAux(charAvatar, bookName) {
+    const wiMod = await getWorldInfoModule();
+    if (!wiMod?.world_info) {
+        console.warn('[Lumiverse] Cannot remove auxiliary book — world_info module unavailable');
+        return false;
+    }
+
+    const worldInfo = wiMod.world_info;
+    const charLore = worldInfo.charLore || [];
+    const idx = charLore.findIndex(e => e.name === charAvatar);
+    if (idx === -1) return true; // Nothing to remove
+
+    const next = (charLore[idx].extraBooks || []).filter(b => b !== bookName);
+    charLore[idx] = { ...charLore[idx], extraBooks: next };
+    worldInfo.charLore = charLore;
+
+    try {
         if (typeof wiMod.saveSettingsDebounced === 'function') {
             wiMod.saveSettingsDebounced();
         }
