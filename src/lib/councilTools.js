@@ -207,14 +207,20 @@ let capturedWorldInfoEntries = [];
 
 /**
  * Capture activated world info entries from the WORLD_INFO_ACTIVATED event.
- * Stores only the text content (no metadata) to minimize token usage.
+ * Stores title (comment/memo) + content so the lore_proposal tool can identify
+ * already-established canon and avoid proposing duplicates.
  * @param {Array} entries - Array of activated WI entry objects
  */
 export function captureWorldInfoEntries(entries) {
   if (!Array.isArray(entries)) return;
   capturedWorldInfoEntries = entries
     .filter(e => e.content && e.content.trim())
-    .map(e => e.content.trim());
+    .map(e => {
+      const title = (e.comment && e.comment.trim())
+        ? e.comment.trim()
+        : (Array.isArray(e.key) && e.key[0] ? e.key[0] : '');
+      return { title, content: e.content.trim() };
+    });
 }
 
 /**
@@ -1180,7 +1186,8 @@ If the story context is unclear or just starting, describe a neutral establishin
     name: "lore_proposal",
     displayName: "Lore Proposal",
     description: "Propose a new worldbuilding detail or lore element worth adding permanently to the world book",
-    prompt: `Propose a new worldbuilding detail, lore element, or setting fact that would enrich the world and is worth preserving permanently.
+    prompt: () => {
+      const base = `Propose a new worldbuilding detail, lore element, or setting fact that would enrich the world and is worth preserving permanently.
 
 Consider:
 - Cultural practices, traditions, or rituals that fit the setting
@@ -1190,7 +1197,13 @@ Consider:
 - Magical systems, technologies, or in-world rules
 - Myths, legends, or in-world beliefs
 
-The proposal should feel organic to the established world and be specific enough to be genuinely useful in future scenes. Frame it as an in-world fact, not a narrative suggestion.`,
+The proposal should feel organic to the established world and be specific enough to be genuinely useful in future scenes. Frame it as an in-world fact, not a narrative suggestion.`;
+      const entries = getCapturedWorldInfoEntries();
+      if (entries.length === 0) return base;
+      return `${base}
+
+If an '### Active World Book Entries ###' section appears in your context, treat those as already-established canon. Do not propose lore that duplicates or closely overlaps with any of those existing entries — focus on genuinely new aspects introduced by the current scene.`;
+    },
     storeInDeliberation: true,
     inputSchema: {
       type: "object",
@@ -1537,8 +1550,12 @@ function buildEnrichmentContext() {
   if (ct.includeWorldInfo) {
     const entries = getCapturedWorldInfoEntries();
     if (entries.length > 0) {
+      const formatted = entries.map(e => {
+        const body = sanitizeForCouncil(e.content);
+        return e.title ? `**${e.title}**\n${body}` : body;
+      });
       sections.push(
-        `### Active World Book Entries ###\n${entries.map(e => sanitizeForCouncil(e)).join("\n\n---\n\n")}`
+        `### Active World Book Entries ###\n${formatted.join("\n\n---\n\n")}`
       );
     }
   }
