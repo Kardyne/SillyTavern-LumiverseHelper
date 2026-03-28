@@ -2024,7 +2024,9 @@ Review the story context above. For each tool call, provide specific, actionable
           try {
             parsedArgs = JSON.parse(toolCall.function.arguments);
           } catch {
-            parsedArgs = { response: toolCall.function.arguments };
+            // Model returned malformed JSON — preserve raw text as content so
+            // the LoreProposalCard (and other structured cards) remain usable.
+            parsedArgs = { title: '', keywords: [], content: toolCall.function.arguments };
           }
           const responseText = formatToolInput(parsedArgs, toolDef);
           if (toolDef.resultVariable) {
@@ -2125,7 +2127,7 @@ Review the story context above. For each tool call, provide specific, actionable
                 try {
                   parsedArgs = JSON.parse(toolCall.function.arguments);
                 } catch {
-                  parsedArgs = { response: toolCall.function.arguments };
+                  parsedArgs = { title: '', keywords: [], content: toolCall.function.arguments };
                 }
                 const retryResponseText = formatToolInput(parsedArgs, toolDef);
                 if (toolDef.resultVariable) {

@@ -234,14 +234,15 @@ function LoreProposalCard({ rawInput }) {
     const [errorMsg, setErrorMsg] = useState(null);
 
     const proposal = rawInput || {};
-    const title = proposal.title || '';
-    // Normalize keywords in case AI returned comma-separated string instead of array
-    const keywords = Array.isArray(proposal.keywords)
-        ? proposal.keywords
-        : (typeof proposal.keywords === 'string'
-            ? proposal.keywords.split(',').map(k => k.trim()).filter(Boolean)
-            : []);
-    const content = proposal.content || '';
+
+    // Normalize initial keywords to a comma-separated string for the text input
+    const initialKeywords = Array.isArray(proposal.keywords)
+        ? proposal.keywords.join(', ')
+        : (typeof proposal.keywords === 'string' ? proposal.keywords : '');
+
+    const [title, setTitle] = useState(proposal.title || '');
+    const [keywordsText, setKeywordsText] = useState(initialKeywords);
+    const [content, setContent] = useState(proposal.content || '');
 
     // Guard: if content is empty the AI found nothing worth proposing
     const isEmpty = !content.trim();
@@ -249,6 +250,7 @@ function LoreProposalCard({ rawInput }) {
     const handleSave = useCallback(async () => {
         setStatus('saving');
         setErrorMsg(null);
+        const keywords = keywordsText.split(',').map(k => k.trim()).filter(Boolean);
         try {
             // Resolve character at click time — respects group/no-char context
             let charInfo = null;
@@ -270,7 +272,7 @@ function LoreProposalCard({ rawInput }) {
             setErrorMsg(err.message);
             setStatus('pending');
         }
-    }, [title, keywords, content]);
+    }, [title, keywordsText, content]);
 
     if (isEmpty) {
         return (
@@ -295,21 +297,43 @@ function LoreProposalCard({ rawInput }) {
 
     return (
         <div className="lumiverse-lore-proposal">
-            <div className="lumiverse-lore-proposal-title">
-                <BookOpen size={13} className="lumiverse-lore-proposal-title-icon" />
-                <span>{title}</span>
+            <div className="lumiverse-lore-proposal-field">
+                <label className="lumiverse-lore-proposal-label">
+                    <BookOpen size={11} className="lumiverse-lore-proposal-title-icon" />
+                    Title
+                </label>
+                <input
+                    className="lumiverse-lore-proposal-input"
+                    type="text"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="Entry title…"
+                />
             </div>
 
-            {keywords.length > 0 && (
-                <div className="lumiverse-lore-proposal-keywords">
+            <div className="lumiverse-lore-proposal-field">
+                <label className="lumiverse-lore-proposal-label">
                     <Tag size={11} className="lumiverse-lore-proposal-keywords-icon" />
-                    {keywords.map((kw, i) => (
-                        <span key={i} className="lumiverse-lore-proposal-keyword-chip">{kw}</span>
-                    ))}
-                </div>
-            )}
+                    Keywords
+                </label>
+                <input
+                    className="lumiverse-lore-proposal-input"
+                    type="text"
+                    value={keywordsText}
+                    onChange={e => setKeywordsText(e.target.value)}
+                    placeholder="keyword1, keyword2…"
+                />
+            </div>
 
-            <div className="lumiverse-lore-proposal-content">{content}</div>
+            <div className="lumiverse-lore-proposal-field">
+                <label className="lumiverse-lore-proposal-label">Content</label>
+                <textarea
+                    className="lumiverse-lore-proposal-textarea"
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    rows={3}
+                />
+            </div>
 
             {errorMsg && (
                 <div className="lumiverse-lore-proposal-error">{errorMsg}</div>
@@ -319,7 +343,7 @@ function LoreProposalCard({ rawInput }) {
                 <button
                     className="lumiverse-lore-proposal-btn lumiverse-lore-proposal-btn--save"
                     onClick={handleSave}
-                    disabled={status === 'saving'}
+                    disabled={status === 'saving' || !title.trim()}
                     type="button"
                 >
                     <Save size={12} />
