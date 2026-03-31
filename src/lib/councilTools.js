@@ -330,6 +330,38 @@ Make it surprising but internally consistent with established story elements.`,
     },
   },
   
+  introduce_obstacle: {
+    name: "introduce_obstacle",
+    displayName: "Introduce Obstacle",
+    description: "Propose a complication, hazard, or misfortune that actively works against the characters",
+    prompt: `Propose a concrete obstacle, hazard, or misfortune that works against the characters — something that strips away options, inflicts a cost, or forces them into a difficult position.
+
+This could be:
+- Physical danger or violence (attackers, a collapsing structure, a predator, a rockslide)
+- Environmental or situational pressure (a storm rolling in, a bridge out, a door locked from outside)
+- Sudden bodily affliction (pain, illness, exhaustion, an old wound reopening)
+- Loss of a resource (supplies stolen, a weapon broken, money gone, a companion incapacitated)
+- Forced separation, capture, or confinement
+- A deadline or countdown that wasn't there before
+- Discovery of bad news that closes off a path they were counting on
+
+Focus on obstacles that remove agency or force hard choices — not mere inconveniences, but genuine pressure. Ground it in what is already present in the scene.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        obstacle: {
+          type: "string",
+          description: "The proposed obstacle, hazard, or misfortune. Should actively work against the characters and feel grounded in the current scene.",
+        },
+        pressure: {
+          type: "string",
+          description: "How this obstacle removes options, forces a cost, or puts the characters under genuine pressure.",
+        },
+      },
+      required: ["obstacle"],
+    },
+  },
+
   voice_concern: {
     name: "voice_concern",
     displayName: "Voice Concern",
