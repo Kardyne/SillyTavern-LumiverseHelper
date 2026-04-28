@@ -2014,26 +2014,44 @@ Review the story context above. For each tool call, provide specific, actionable
 
   const systemMessage = buildSidecarSystemMessage(memberTools.length);
 
-  const requestBody = {
-    model: model,
-    max_tokens: maxTokens,
-    temperature: temperature,
-    messages: [
-      { role: "system", content: systemMessage },
-      { role: "user", content: userPrompt },
-    ],
-    tools: tools,
-    tool_choice: "required",
-  };
+  function makeRequestBody(toolChoice) {
+    return {
+      model: model,
+      max_tokens: maxTokens,
+      temperature: temperature,
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: userPrompt },
+      ],
+      tools: tools,
+      tool_choice: toolChoice,
+    };
+  }
 
-  const fetchOptions = {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
-  };
-  if (signal) fetchOptions.signal = signal;
+  let requestBody = makeRequestBody("required");
+  let response;
+  try {
+    const fetchOptions = {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    };
+    if (signal) fetchOptions.signal = signal;
+    response = await fetch(endpoint, fetchOptions);
+  } catch (e) {
+    throw e;
+  }
 
-  const response = await fetch(endpoint, fetchOptions);
+  // Fall back to tool_choice "auto" if the model rejects "required"
+  if (response.status === 400) {
+    const errorText = await response.clone().text().catch(() => "");
+    if (errorText.toLowerCase().includes("tool_choice")) {
+      requestBody = makeRequestBody("auto");
+      const retryOptions = { method: "POST", headers, body: JSON.stringify(requestBody) };
+      if (signal) retryOptions.signal = signal;
+      response = await fetch(endpoint, retryOptions);
+    }
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unable to read error");
